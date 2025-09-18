@@ -1,0 +1,47 @@
+# Creates/updates a SYSTEM task that runs Speedtest-Logger.ps1 every 15 minutes
+$ErrorActionPreference = 'Stop'
+
+$BaseDir  = 'C:\ProgramData\SecureNet\NetMon'
+$Script   = Join-Path $BaseDir 'Speedtest-Logger.ps1'
+$TaskName = 'SecureNet-Speedtest-Logger'
+
+if (!(Test-Path $Script)) { throw "Missing $Script. Copy the logger script first." }
+
+# Build PowerShell action args
+$psArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Script`""
+
+function Test-TaskExists {
+    $p = Start-Process -FilePath schtasks.exe -ArgumentList @('/Query','/TN',"$TaskName") -PassThru -Wait
+    return ($p.ExitCode -eq 0)
+}
+
+try {
+    Import-Module ScheduledTasks -ErrorAction Stop | Out-Null
+
+    $Action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
+    $Trigger   = New-ScheduledTaskTrigger `
+                   -Once `
+                   -At (Get-Date).AddMinutes(1) `
+                   -RepetitionInterval (New-TimeSpan -Minutes 15) `
+                   -RepetitionDuration ([TimeSpan]::MaxValue)
+    $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    $Settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew
+
+    if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+    }
+    Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings | Out-Null
+
+    Write-Host "[$TaskName] created via ScheduledTasks module (every 15 minutes)."
+}
+catch {
+    # Fallback: schtasks.exe
+    if (Test-TaskExists) {
+        schtasks.exe /Delete /TN $TaskName /F | Out-Null
+    }
+
+    schtasks.exe /Create /TN $TaskName /SC MINUTE /MO 15 /RU SYSTEM /RL HIGHEST /TR "powershell.exe $psArgs" /F | Out-Null
+    schtasks.exe /Run /TN $TaskName | Out-Null
+
+    Write-Host "[$TaskName] created via schtasks.exe (every 15 minutes)."
+}
