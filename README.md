@@ -21,4 +21,4 @@ Built to be lightweight, reliable, and tailored for Windows environments.
 Clone the repository to your local machine:
 
 ```powershell
-git clone https://github.com/<your-username>/PacketSense.git```
+git clone https://github.com/<your-username>/PacketSense.git
