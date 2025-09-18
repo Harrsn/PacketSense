@@ -1,0 +1,1 @@
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\ProgramData\SecureNet\NetMon\Build-Speedtest-Report.ps1"
